@@ -76,4 +76,66 @@ router.get('/nearby', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Erreur lors de la recherche de BAMs' });
   }
+
+  });
+
+//Répondre à un BAM
+router.post('/:id/respond', async (req, res) => {
+  const bamId = req.params.id;
+  const { userId } = req.body;
+
+  try {
+    // Vérifie que le BAM existe
+    const bam = await prisma.bam.findUnique({
+      where: { id: bamId },
+    });
+
+    if (!bam) {
+      return res.status(404).json({ error: 'BAM non trouvé' });
+    }
+
+    // Vérifie que la réponse n'existe pas déjà pour ce user
+    const existing = await prisma.response.findFirst({
+      where: { bamId, userId }
+    });
+
+    if (existing) {
+      return res.status(400).json({ error: 'Vous avez déjà répondu à ce BAM' });
+    }
+
+    // Crée la réponse
+    const response = await prisma.response.create({
+      data: {
+        bamId,
+        userId
+      }
+    });
+
+    res.json(response);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur lors de la réponse au BAM' });
+  }
 });
+
+// Voir les réponses à un BAM
+router.get('/:id/responses', async (req, res) => {
+  const bamId = req.params.id;
+
+  try {
+    const responses = await prisma.response.findMany({
+      where: { bamId },
+      include: {
+        user: true // Pour afficher le pseudo et la photo
+      }
+    });
+
+    res.json(responses);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des réponses' });
+  }
+});
+
+
+

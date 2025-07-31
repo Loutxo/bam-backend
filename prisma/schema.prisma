@@ -20,6 +20,7 @@ model User {
   photoUrl  String?
   createdAt DateTime @default(now())
   bams      Bam[]
+  responses Response[]
 }
 
 model Bam {
@@ -32,4 +33,15 @@ model Bam {
   longitude   Float
   createdAt   DateTime @default(now())
   expiresAt   DateTime
+  responses   Response[]
 }
+
+model Response {
+  id        String   @id @default(uuid())
+  bam       Bam      @relation(fields: [bamId], references: [id])
+  bamId     String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+}
+
