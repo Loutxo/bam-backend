@@ -14,24 +14,26 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  pseudo    String
-  phone     String   @unique
-  photoUrl  String?
-  createdAt DateTime @default(now())
-  bams      Bam[]
-  responses Response[]
+  id              String     @id @default(uuid())
+  pseudo          String
+  phone           String     @unique
+  photoUrl        String?
+  createdAt       DateTime   @default(now())
+  bams            Bam[]
+  responses       Response[]
+  sentMessages    Message[]  @relation("FromUser")
+  receivedMessages Message[] @relation("ToUser")
 }
 
 model Bam {
-  id          String   @id @default(uuid())
-  user        User     @relation(fields: [userId], references: [id])
+  id          String     @id @default(uuid())
+  user        User       @relation(fields: [userId], references: [id])
   userId      String
   text        String
   price       Float
   latitude    Float
   longitude   Float
-  createdAt   DateTime @default(now())
+  createdAt   DateTime   @default(now())
   expiresAt   DateTime
   responses   Response[]
 }
@@ -45,3 +47,15 @@ model Response {
   createdAt DateTime @default(now())
 }
 
+model Message {
+  id          String   @id @default(uuid())
+  bamId       String
+  fromUser    User     @relation("FromUser", fields: [fromUserId], references: [id])
+  fromUserId  String
+  toUser      User     @relation("ToUser", fields: [toUserId], references: [id])
+  toUserId    String
+  text        String
+  createdAt   DateTime @default(now())
+
+  @@index([bamId, createdAt])
+}

@@ -137,5 +137,48 @@ router.get('/:id/responses', async (req, res) => {
   }
 });
 
+//messagerie éphémère
+router.post('/:id/messages', async (req, res) => {
+  const { fromUserId, toUserId, text } = req.body;
+  const bamId = req.params.id;
+
+  try {
+    const message = await prisma.message.create({
+      data: {
+        bamId,
+        fromUserId,
+        toUserId,
+        text,
+      }
+    });
+
+    res.json(message);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: 'Erreur lors de l’envoi du message' });
+  }
+});
+
+router.get('/:id/messages', async (req, res) => {
+  const bamId = req.params.id;
+
+  try {
+    const messages = await prisma.message.findMany({
+      where: { bamId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        fromUser: true,
+        toUser: true
+      }
+    });
+
+    res.json(messages);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des messages' });
+  }
+});
+
+
 
 
