@@ -14,28 +14,44 @@ datasource db {
 }
 
 model User {
-  id              String     @id @default(uuid())
-  pseudo          String
-  phone           String     @unique
-  photoUrl        String?
-  createdAt       DateTime   @default(now())
-  bams            Bam[]
-  responses       Response[]
-  sentMessages    Message[]  @relation("FromUser")
+  id        String   @id @default(uuid())
+  pseudo    String
+  phone     String   @unique
+  photoUrl  String?
+  createdAt DateTime @default(now())
+
+  // Relations existantes
+  bams      Bam[]
+  responses Response[]
+
+  // Chat
+  sentMessages     Message[] @relation("FromUser")
   receivedMessages Message[] @relation("ToUser")
+
+  // Appels
+  callsMade     Call[] @relation("CallsFrom")
+  callsReceived Call[] @relation("CallsTo")
+
+  // Notes / réputation
+  reviewsWritten  Review[] @relation("ReviewsWritten")
+  reviewsReceived Review[] @relation("ReviewsReceived")
+  score           Float?
 }
 
 model Bam {
-  id          String     @id @default(uuid())
-  user        User       @relation(fields: [userId], references: [id])
-  userId      String
-  text        String
-  price       Float
-  latitude    Float
-  longitude   Float
-  createdAt   DateTime   @default(now())
-  expiresAt   DateTime
-  responses   Response[]
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  text      String
+  price     Float
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  responses Response[]
+  calls     Call[]
+  Review    Review[]
 }
 
 model Response {
@@ -48,14 +64,42 @@ model Response {
 }
 
 model Message {
-  id          String   @id @default(uuid())
-  bamId       String
-  fromUser    User     @relation("FromUser", fields: [fromUserId], references: [id])
-  fromUserId  String
-  toUser      User     @relation("ToUser", fields: [toUserId], references: [id])
-  toUserId    String
-  text        String
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  bamId      String
+  fromUser   User     @relation("FromUser", fields: [fromUserId], references: [id])
+  fromUserId String
+  toUser     User     @relation("ToUser", fields: [toUserId], references: [id])
+  toUserId   String
+  text       String
+  createdAt  DateTime @default(now())
 
   @@index([bamId, createdAt])
+}
+
+model Call {
+  id        String   @id @default(uuid())
+  bam       Bam      @relation(fields: [bamId], references: [id])
+  bamId     String
+  fromUser  User     @relation("CallsFrom", fields: [fromId], references: [id])
+  fromId    String
+  toUser    User     @relation("CallsTo", fields: [toId], references: [id])
+  toId      String
+  createdAt DateTime @default(now())
+
+  @@index([bamId, createdAt])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  bam       Bam?     @relation(fields: [bamId], references: [id])
+  bamId     String?
+  fromUser  User     @relation("ReviewsWritten", fields: [fromId], references: [id])
+  fromId    String
+  toUser    User     @relation("ReviewsReceived", fields: [toId], references: [id])
+  toId      String
+  rating    Float
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([toId])
 }
