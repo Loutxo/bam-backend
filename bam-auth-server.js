@@ -7,6 +7,20 @@ if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config({ path: '.env.local' });
 }
 
+// Validation des variables d'environnement critiques
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('❌ Variables d\'environnement manquantes:');
+  missingVars.forEach(varName => {
+    console.error(`   • ${varName}`);
+  });
+  console.error('\n💡 Configurez ces variables dans Render Dashboard → Environment');
+  console.error('   URL: https://dashboard.render.com → bam-api → Environment\n');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -67,6 +81,22 @@ const authenticateUser = async (req, res, next) => {
 };
 
 // ===== ROUTES PUBLIQUES =====
+
+// Route de santé (health check)
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      PORT: process.env.PORT || 3000,
+      HAS_SUPABASE_URL: !!process.env.SUPABASE_URL,
+      HAS_SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+      HAS_SUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY
+    }
+  });
+});
 
 // Route d'accueil
 app.get('/', (req, res) => {
