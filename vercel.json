@@ -1,9 +1,8 @@
 {
-  "version": 2,
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api"
+  "functions": {
+    "bam-auth-server.js": {
+      "memory": 1024,
+      "maxDuration": 10
     }
-  ]
+  }
 }
