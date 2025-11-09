@@ -702,18 +702,19 @@ app.get('/api/test/supabase', async (req, res) => {
 // Export pour Vercel (serverless)
 module.exports = app;
 
-// Démarrage du serveur uniquement en mode développement local
-if (process.env.NODE_ENV !== 'production' && require.main === module) {
+// Démarrage du serveur (Render, local, etc.)
+if (require.main === module) {
   app.listen(PORT, async () => {
-    console.log(`🚀 Serveur BAM avec Auth démarré sur http://localhost:${PORT}`);
+    console.log(`🚀 Serveur BAM avec Auth démarré sur le port ${PORT}`);
+    console.log(`🌍 Mode: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 Supabase: ${process.env.SUPABASE_URL || 'Non configuré'}`);
     console.log(`🔐 Authentification: Activée`);
     
-    // Test initial
+    // Test initial de connexion Supabase
     try {
       const supabaseAdmin = createClient(
         process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_KEY
+        process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY
       );
 
       const { data, error } = await supabaseAdmin
@@ -724,13 +725,15 @@ if (process.env.NODE_ENV !== 'production' && require.main === module) {
 
       console.log('✅ Supabase connecté - Auth prêt');
       console.log(`\n🎯 Endpoints disponibles:`);
+      console.log(`   • GET /health - Health check`);
       console.log(`   • POST /auth/register - Inscription`);
       console.log(`   • POST /auth/login - Connexion`);
       console.log(`   • GET /auth/me - Profil (Bearer token requis)`);
       console.log(`   • GET /api/badges - Badges (Bearer token requis)`);
       console.log(`   • GET /api/bams/nearby - BAMs proches (Bearer token requis)`);
     } catch (error) {
-      console.error('❌ Erreur Supabase:', error.message);
+      console.error('⚠️ Avertissement Supabase:', error.message);
+      console.log('   Le serveur démarre quand même, mais certaines fonctions DB peuvent ne pas fonctionner');
     }
   });
 }
