@@ -14,12 +14,27 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  pseudo    String
-  phone     String   @unique
-  photoUrl  String?
-  createdAt DateTime @default(now())
+  id               String    @id @default(uuid())
+  pseudo           String
+  phone            String    @unique
+  password         String?   // Hash du mot de passe (optionnel pour migration)
+  profileImageUrl  String?   // URL de la photo de profil (Cloudinary)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lastLoginAt      DateTime? // Dernière connexion
 
+  // Push Notifications
+  fcmToken     String?   // Token Firebase Cloud Messaging
+  pushEnabled  Boolean   @default(true) // Préférences notifications
+
+  // Admin & Modération
+  isAdmin      Boolean   @default(false) // Droits administrateur complets
+  isModerator  Boolean   @default(false) // Droits de modération
+
+  // Gamification
+  totalPoints  Int       @default(0) // Points totaux accumulés
+  currentLevel Int       @default(1) // Niveau actuel basé sur les points
+  
   // Relations existantes
   bams      Bam[]
   responses Response[]
@@ -36,6 +51,28 @@ model User {
   reviewsWritten  Review[] @relation("ReviewsWritten")
   reviewsReceived Review[] @relation("ReviewsReceived")
   score           Float?
+
+  // Gamification Relations
+  pointHistory    UserPoints[]
+  userBadges      UserBadge[]
+  userAchievements UserAchievement[]
+  userChallenges  UserChallenge[]
+  leaderboardEntries LeaderboardEntry[]
+  dailyStreak     DailyStreak?
+  
+  // Signalement Relations
+  reportsCreated  Report[] @relation("ReportsCreated")  // Signalements créés par cet utilisateur
+  reportsReceived Report[] @relation("ReportsReceived") // Signalements contre cet utilisateur
+  reportsReviewed Report[] @relation("ReportsReviewed") // Signalements traités (si modérateur)
+  sanctions       UserSanction[] @relation("UserSanctions") // Sanctions reçues
+  sanctionsIssued UserSanction[] @relation("SanctionsIssued") // Sanctions émises (si modérateur)
+  
+  // Géolocalisation Relations
+  locationHistory LocationHistory[]
+  favoriteZones   FavoriteZone[]
+  zoneVisits      ZoneVisit[]
+  geofenceAlerts  GeofenceAlert[]
+  proximityNotifications ProximityNotification[]
 }
 
 model Bam {
@@ -46,12 +83,15 @@ model Bam {
   price     Float
   latitude  Float
   longitude Float
+  imageUrl  String?  // URL de l'image de la BAM (Cloudinary)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   expiresAt DateTime
 
   responses Response[]
   calls     Call[]
   Review    Review[]
+  reports   Report[] @relation("BamReports") // Signalements de ce BAM
 }
 
 model Response {
@@ -72,6 +112,8 @@ model Message {
   toUserId   String
   text       String
   createdAt  DateTime @default(now())
+  
+  reports    Report[] @relation("MessageReports") // Signalements de ce message
 
   @@index([bamId, createdAt])
 }
@@ -102,4 +144,526 @@ model Review {
   createdAt DateTime @default(now())
 
   @@index([toId])
+}
+
+// ===========================================
+// GAMIFICATION MODELS
+// ===========================================
+
+// Le modèle PointTransaction a été remplacé par UserPoints
+
+// Les modèles Badge, Achievement, etc. sont définis plus loin dans le fichier avec plus de fonctionnalités
+
+// =============================================================================
+// SYSTÈME DE SIGNALEMENT
+// =============================================================================
+
+enum ReportCategory {
+  SPAM          // Contenu spam
+  HARASSMENT    // Harcèlement
+  HATE_SPEECH   // Discours haineux
+  INAPPROPRIATE // Contenu inapproprié
+  SCAM          // Arnaque
+  FAKE_PROFILE  // Faux profil
+  VIOLENCE      // Violence/menaces
+  OTHER         // Autre
+}
+
+enum ReportStatus {
+  PENDING    // En attente de traitement
+  REVIEWING  // En cours d'examen
+  RESOLVED   // Résolu (action prise)
+  DISMISSED  // Rejeté (pas d'action)
+  ESCALATED  // Escaladé à niveau supérieur
+}
+
+enum ReportType {
+  USER    // Signalement d'utilisateur
+  BAM     // Signalement de BAM
+  MESSAGE // Signalement de message
+}
+
+model Report {
+  id          String         @id @default(uuid())
+  type        ReportType     // Type de signalement
+  category    ReportCategory // Catégorie du signalement
+  status      ReportStatus   @default(PENDING)
+  
+  // Rapporteur
+  reporter    User          @relation("ReportsCreated", fields: [reporterId], references: [id])
+  reporterId  String
+  
+  // Cible du signalement
+  targetUserId  String?     // ID utilisateur signalé
+  targetUser    User?       @relation("ReportsReceived", fields: [targetUserId], references: [id])
+  targetBamId   String?     // ID BAM signalé
+  targetBam     Bam?        @relation("BamReports", fields: [targetBamId], references: [id])
+  targetMessageId String?   // ID message signalé
+  targetMessage Message?    @relation("MessageReports", fields: [targetMessageId], references: [id])
+  
+  // Contenu du signalement
+  reason      String        // Raison détaillée
+  description String?       // Description additionnelle
+  evidence    String?       // Preuves (URLs d'images, etc.)
+  
+  // Traitement
+  reviewedBy     String?    // ID modérateur qui a traité
+  reviewedByUser User?      @relation("ReportsReviewed", fields: [reviewedBy], references: [id])
+  reviewedAt     DateTime?  // Date de traitement
+  adminNotes     String?    // Notes internes admin
+  actionTaken    String?    // Action prise (ban, warning, etc.)
+  
+  // Métadonnées
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([reporterId])
+  @@index([targetUserId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model UserSanction {
+  id          String     @id @default(uuid())
+  user        User       @relation("UserSanctions", fields: [userId], references: [id])
+  userId      String
+  type        SanctionType
+  reason      String
+  description String?
+  duration    Int?       // Durée en heures (null = permanent)
+  isActive    Boolean    @default(true)
+  
+  // Modérateur responsable
+  issuedBy     String    // ID du modérateur
+  issuedByUser User      @relation("SanctionsIssued", fields: [issuedBy], references: [id])
+  
+  // Dates
+  createdAt DateTime @default(now())
+  expiresAt DateTime? // Date d'expiration (calculée)
+  
+  @@index([userId])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+enum SanctionType {
+  WARNING        // Avertissement
+  TEMPORARY_BAN  // Ban temporaire
+  PERMANENT_BAN  // Ban permanent
+  CHAT_RESTRICT  // Restriction chat
+  POST_RESTRICT  // Restriction création BAM
+}
+
+model AutoModerationRule {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+  pattern     String   // Pattern à détecter (regex ou mots-clés)
+  action      AutoModAction
+  severity    Int      @default(1) // Niveau de sévérité 1-10
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Statistiques
+  triggeredCount Int @default(0) // Nombre de fois déclenché
+  
+  @@index([isActive])
+}
+
+enum AutoModAction {
+  FLAG       // Marquer pour révision
+  HIDE       // Masquer le contenu
+  DELETE     // Supprimer le contenu
+  WARN_USER  // Avertir l'utilisateur
+  TEMP_BAN   // Ban temporaire automatique
+}
+
+// =============================================================================
+// SYSTÈME DE GAMIFICATION AVANCÉ
+// =============================================================================
+
+model UserPoints {
+  id            String         @id @default(uuid())
+  userId        String
+  type          PointType
+  amount        Int            // Points gagnés/perdus
+  reason        String         // Description de l'action
+  sourceId      String?        // ID de l'objet source (BAM, Message, etc.)
+  sourceType    PointSource?   // Type d'objet source
+  createdAt     DateTime       @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([type])
+}
+
+enum PointType {
+  EARNED    // Points gagnés
+  SPENT     // Points dépensés
+  BONUS     // Bonus spéciaux
+  PENALTY   // Pénalités
+}
+
+enum PointSource {
+  BAM_CREATED     // Création d'un BAM
+  BAM_RESPONDED   // Réponse à un BAM
+  MESSAGE_SENT    // Envoi de message
+  CALL_MADE       // Appel effectué
+  REVIEW_GIVEN    // Note donnée
+  DAILY_LOGIN     // Connexion quotidienne
+  ACHIEVEMENT     // Achievement débloqué
+  CHALLENGE       // Défi complété
+  REFERRAL        // Parrainage
+  COMMUNITY       // Participation communautaire
+}
+
+// Définitions des modèles de gamification avancée
+
+model Badge {
+  id            String       @id @default(uuid())
+  name          String       @unique
+  description   String
+  iconUrl       String?      // URL de l'icône du badge
+  category      BadgeCategory
+  pointsReward  Int          @default(0) // Points bonus à l'obtention
+  rarity        BadgeRarity  @default(COMMON)
+  conditions    String       // JSON des conditions d'obtention
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  // Relations
+  userBadges UserBadge[]
+  
+  @@index([category])
+  @@index([rarity])
+}
+
+enum BadgeCategory {
+  CREATOR      // Badges de création
+  SOCIAL       // Badges sociaux
+  EXPLORER     // Badges d'exploration
+  ACHIEVER     // Badges d'accomplissement
+  COMMUNITY    // Badges communautaires
+  SPECIAL      // Badges spéciaux/événements
+}
+
+enum BadgeRarity {
+  COMMON       // Commun
+  UNCOMMON     // Peu commun
+  RARE         // Rare
+  EPIC         // Épique
+  LEGENDARY    // Légendaire
+}
+
+model UserBadge {
+  id          String   @id @default(uuid())
+  userId      String
+  badgeId     String
+  earnedAt    DateTime @default(now())
+  progress    Json?    // Progression vers le badge (si applicable)
+  
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, badgeId]) // Un utilisateur ne peut avoir qu'un badge une fois
+  @@index([userId, earnedAt])
+}
+
+model Achievement {
+  id            String           @id @default(uuid())
+  name          String           @unique
+  description   String
+  category      AchievementCategory
+  pointsReward  Int              @default(0)
+  badgeReward   String?          // ID du badge accordé
+  conditions    String           // JSON des conditions
+  isActive      Boolean          @default(true)
+  isRepeatable  Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  
+  // Relations
+  userAchievements UserAchievement[]
+  
+  @@index([category])
+}
+
+enum AchievementCategory {
+  MILESTONE    // Jalons (premier BAM, 100e message, etc.)
+  STREAK       // Séries (connexions consécutives, etc.)
+  SOCIAL       // Social (amis, interactions)
+  GEOGRAPHIC   // Géographique (villes visitées, etc.)
+  TEMPORAL     // Temporel (heure, jour, saison)
+  CREATIVE     // Créatif (types de BAMs, etc.)
+  COMPETITIVE  // Compétitif (classements, défis)
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  userId        String
+  achievementId String
+  earnedAt      DateTime    @default(now())
+  progress      Json?       // Progression actuelle
+  data          Json?       // Données spécifiques à l'achievement
+  
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, achievementId]) // Sauf si repeatable
+  @@index([userId, earnedAt])
+}
+
+model Challenge {
+  id            String          @id @default(uuid())
+  name          String
+  description   String
+  type          ChallengeType
+  difficulty    ChallengeDifficulty @default(EASY)
+  pointsReward  Int             @default(0)
+  badgeReward   String?         // ID du badge accordé
+  conditions    String          // JSON des conditions
+  startDate     DateTime?       // Date de début (null = permanent)
+  endDate       DateTime?       // Date de fin (null = permanent)
+  isActive      Boolean         @default(true)
+  maxParticipants Int?          // Limite de participants (null = illimité)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  // Relations
+  participants UserChallenge[]
+  
+  @@index([type, isActive])
+  @@index([startDate, endDate])
+}
+
+enum ChallengeType {
+  DAILY        // Défi quotidien
+  WEEKLY       // Défi hebdomadaire
+  MONTHLY      // Défi mensuel
+  SEASONAL     // Défi saisonnier
+  EVENT        // Défi événementiel
+  COMMUNITY    // Défi communautaire
+  PERSONAL     // Défi personnel
+}
+
+enum ChallengeDifficulty {
+  EASY         // Facile - 1-2 actions
+  MEDIUM       // Moyen - 3-5 actions
+  HARD         // Difficile - 6-10 actions
+  EXPERT       // Expert - 10+ actions
+  LEGENDARY    // Légendaire - défis exceptionnels
+}
+
+model UserChallenge {
+  id          String       @id @default(uuid())
+  userId      String
+  challengeId String
+  startedAt   DateTime     @default(now())
+  completedAt DateTime?
+  progress    Json         // Progression actuelle
+  status      ChallengeStatus @default(ACTIVE)
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, challengeId])
+  @@index([userId, status])
+  @@index([challengeId, status])
+}
+
+enum ChallengeStatus {
+  ACTIVE       // En cours
+  COMPLETED    // Terminé
+  FAILED       // Échoué
+  EXPIRED      // Expiré
+}
+
+model Leaderboard {
+  id          String         @id @default(uuid())
+  name        String         @unique
+  description String
+  type        LeaderboardType
+  period      LeaderboardPeriod @default(ALL_TIME)
+  category    String?        // Catégorie spécifique (optionnel)
+  isActive    Boolean        @default(true)
+  resetAt     DateTime?      // Prochaine remise à zéro
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relations
+  entries LeaderboardEntry[]
+  
+  @@index([type, period])
+}
+
+enum LeaderboardType {
+  POINTS       // Classement par points
+  BAMS         // Classement par nombre de BAMs
+  CONNECTIONS  // Classement par connexions
+  REVIEWS      // Classement par notes reçues
+  ACHIEVEMENTS // Classement par achievements
+  CHALLENGES   // Classement par défis complétés
+  ACTIVITY     // Classement par activité
+}
+
+enum LeaderboardPeriod {
+  DAILY        // Quotidien
+  WEEKLY       // Hebdomadaire
+  MONTHLY      // Mensuel
+  YEARLY       // Annuel
+  ALL_TIME     // Tout temps
+}
+
+model LeaderboardEntry {
+  id            String    @id @default(uuid())
+  leaderboardId String
+  userId        String
+  position      Int
+  score         Int       // Score/points pour cette entrée
+  data          Json?     // Données supplémentaires
+  updatedAt     DateTime  @updatedAt
+  
+  leaderboard Leaderboard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([leaderboardId, userId])
+  @@index([leaderboardId, position])
+  @@index([userId])
+}
+
+model DailyStreak {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  currentStreak Int    @default(0)
+  longestStreak Int    @default(0)
+  lastLoginDate DateTime?
+  streakStart   DateTime?
+  totalDays     Int    @default(0) // Total de jours de connexion
+  updatedAt     DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([currentStreak])
+  @@index([longestStreak])
+}
+
+// =============================================================================
+// SYSTÈME DE GÉOLOCALISATION AVANCÉE
+// =============================================================================
+
+model LocationHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  latitude  Float
+  longitude Float
+  accuracy  Float?   // Précision en mètres
+  address   String?  // Adresse résolue (optionnelle)
+  city      String?  // Ville
+  country   String?  // Pays
+  source    LocationSource @default(MANUAL) // Source de la localisation
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([latitude, longitude])
+  @@index([city])
+}
+
+enum LocationSource {
+  MANUAL      // Saisie manuelle
+  GPS         // GPS automatique
+  BAM_CREATION // Lors de création BAM
+  CHECK_IN    // Check-in manuel
+  BACKGROUND  // Tracking background
+}
+
+model FavoriteZone {
+  id          String     @id @default(uuid())
+  userId      String
+  name        String     // Nom donné par l'utilisateur (ex: "Maison", "Bureau")
+  description String?    // Description optionnelle
+  latitude    Float      // Centre de la zone
+  longitude   Float      // Centre de la zone
+  radius      Int        // Rayon en mètres
+  color       String?    // Couleur pour l'affichage
+  isActive    Boolean    @default(true)
+  notifyOnEnter Boolean  @default(false) // Notifier à l'entrée
+  notifyOnExit  Boolean  @default(false) // Notifier à la sortie
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  visits ZoneVisit[]
+  alerts GeofenceAlert[]
+  
+  @@index([userId])
+  @@index([latitude, longitude])
+}
+
+model ZoneVisit {
+  id           String      @id @default(uuid())
+  userId       String
+  zoneId       String
+  enteredAt    DateTime    @default(now())
+  exitedAt     DateTime?   // Null si encore dans la zone
+  duration     Int?        // Durée en minutes (calculée à la sortie)
+  
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone FavoriteZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, enteredAt])
+  @@index([zoneId, enteredAt])
+}
+
+model GeofenceAlert {
+  id        String      @id @default(uuid())
+  userId    String
+  type      AlertType
+  zoneId    String?     // Zone concernée (si applicable)
+  latitude  Float?      // Position de l'alerte
+  longitude Float?      // Position de l'alerte
+  title     String      // Titre de l'alerte
+  message   String      // Message de l'alerte
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone FavoriteZone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, createdAt])
+  @@index([isRead])
+}
+
+enum AlertType {
+  ZONE_ENTER       // Entrée dans une zone favorite
+  ZONE_EXIT        // Sortie d'une zone favorite
+  BAM_NEARBY       // BAM proche détectée
+  USER_NEARBY      // Utilisateur proche détecté
+  NEW_AREA         // Nouvelle zone visitée
+  FREQUENT_VISIT   // Zone visitée fréquemment
+}
+
+model ProximityNotification {
+  id           String   @id @default(uuid())
+  userId       String   // Utilisateur qui reçoit la notification
+  targetType   ProximityTarget
+  targetId     String   // ID du BAM ou utilisateur proche
+  distance     Int      // Distance en mètres
+  isProcessed  Boolean  @default(false)
+  notifiedAt   DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, notifiedAt])
+  @@index([isProcessed])
+}
+
+enum ProximityTarget {
+  BAM     // BAM proche
+  USER    // Utilisateur proche
 }

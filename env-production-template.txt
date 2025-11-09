@@ -1,0 +1,36 @@
+# Variables d'environnement pour PRODUCTION
+
+# Base de données (sera fournie automatiquement par Heroku/Railway/Supabase)
+DATABASE_URL=postgresql://user:password@host:5432/database
+
+# Configuration serveur
+PORT=${PORT:-3000}
+NODE_ENV=production
+
+# Authentification JWT - CHANGEZ CES VALEURS !
+JWT_SECRET=CHANGEZ_MOI_SECRET_SUPER_SECURISE_32_CARACTERES_MINIMUM_PRODUCTION
+JWT_EXPIRES_IN=24h
+
+# Configuration CORS (ajustez selon vos domaines)
+FRONTEND_URL=https://votre-app-frontend.com
+ADMIN_URL=https://admin.votre-app.com
+
+# APIs externes (optionnelles - à configurer si nécessaire)
+FIREBASE_PROJECT_ID=votre-projet-firebase
+GOOGLE_MAPS_API_KEY=votre-cle-google-maps
+
+# Stockage images (optionnel)
+CLOUDINARY_CLOUD_NAME=votre-cloudinary
+CLOUDINARY_API_KEY=votre-api-key
+CLOUDINARY_API_SECRET=votre-api-secret
+
+# Monitoring (optionnels mais recommandés)
+SENTRY_DSN=https://...@sentry.io/...
+LOG_LEVEL=info
+
+# Push notifications (optionnelles)
+FCM_SERVER_KEY=votre-firebase-server-key
+
+# Sécurité - Rate limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100

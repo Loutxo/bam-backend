@@ -1,7 +1,9 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const GamificationService = require('../services/gamificationService');
 const router = express.Router();
 const prisma = new PrismaClient();
+const gamificationService = GamificationService; // Singleton
 
 // POST /reviews — créer une note
 router.post('/', async (req, res) => {
@@ -30,7 +32,7 @@ router.post('/', async (req, res) => {
     }
 
     const review = await prisma.review.create({
-      data: { fromId: fromUserId, toId: toUserId, bamId: bamId ?? null, rating, comment }
+      data: { fromId: fromUserId, toId: toUserId, bamId: bamId ?? null, rating, comment },
     });
 
     // Recalcule la moyenne "score" du noté
@@ -42,6 +44,20 @@ router.post('/', async (req, res) => {
       where: { id: toUserId },
       data: { score: agg._avg.rating ?? 0 },
     });
+
+    // 🎮 Attribution des points pour donner un avis
+    try {
+      await gamificationService.awardPoints(
+        fromUserId, 
+        'REVIEW_GIVEN',
+        null,
+        `Avis donné à un utilisateur (${rating}/5)`,
+        bamId
+      );
+      console.log(`🎯 Points attribués pour avis donné par ${fromUserId}`);
+    } catch (gamificationError) {
+      console.error('Erreur gamification lors avis:', gamificationError);
+    }
 
     res.json(review);
   } catch (e) {
@@ -55,7 +71,7 @@ router.get('/users/:id/reviews', async (req, res) => {
   try {
     const reviews = await prisma.review.findMany({
       where: { toId: req.params.id },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
     res.json(reviews);
   } catch (e) {

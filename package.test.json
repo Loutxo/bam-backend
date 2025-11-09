@@ -1,0 +1,26 @@
+{
+  "name": "bam-backend-tests",
+  "version": "1.0.0",
+  "description": "Tests for BAM API",
+  "scripts": {
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": ["**/__tests__/**/*.test.ts"],
+    "collectCoverageFrom": [
+      "*.js",
+      "routes/*.js",
+      "!node_modules/**"
+    ]
+  }
+}

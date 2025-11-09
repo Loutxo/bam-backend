@@ -1,7 +1,9 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const GamificationService = require('../services/gamificationService');
 const router = express.Router();
 const prisma = new PrismaClient();
+const gamificationService = GamificationService; // Singleton
 
 // POST /calls — enregistrer un appel entre 2 users pour un BAM
 router.post('/', async (req, res) => {
@@ -29,8 +31,29 @@ router.post('/', async (req, res) => {
     if (!validPair) return res.status(403).json({ error: 'Participants non autorisés pour ce BAM' });
 
     const call = await prisma.call.create({
-      data: { bamId: idBam, fromId: idCaller, toId: idCalled }
+      data: { bamId: idBam, fromId: idCaller, toId: idCalled },
     });
+
+    // 🎮 Attribution des points pour appel terminé (aux deux participants)
+    try {
+      await gamificationService.awardPoints(
+        idCaller, 
+        'CALL_COMPLETED',
+        null,
+        'Appel effectué',
+        idBam
+      );
+      await gamificationService.awardPoints(
+        idCalled, 
+        'CALL_COMPLETED',
+        null,
+        'Appel reçu et terminé',
+        idBam
+      );
+      console.log(`🎯 Points attribués pour appel terminé entre ${idCaller} et ${idCalled}`);
+    } catch (gamificationError) {
+      console.error('Erreur gamification lors appel:', gamificationError);
+    }
 
     res.json(call);
   } catch (e) {
@@ -44,7 +67,7 @@ router.get('/bams/:id/calls', async (req, res) => {
   try {
     const calls = await prisma.call.findMany({
       where: { bamId: req.params.id },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
     res.json(calls);
   } catch (e) {

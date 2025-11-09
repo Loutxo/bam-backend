@@ -1,15 +1,9 @@
 {
   "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "bam-auth-server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/bam-auth-server.js"
+      "source": "/(.*)",
+      "destination": "/api"
     }
   ]
 }

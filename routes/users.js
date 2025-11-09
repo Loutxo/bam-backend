@@ -1,15 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const { validateUserCreation, handleValidationErrors } = require('../middleware/validation');
+const { userCreationLimiter } = require('../middleware/rateLimiting');
+
 const prisma = new PrismaClient();
 
 // Créer un utilisateur
-router.post('/', async (req, res) => {
-  const { pseudo, phone, photoUrl } = req.body;
+router.post('/', userCreationLimiter, validateUserCreation, handleValidationErrors, async (req, res) => {
+  const { pseudo, phone, profileImageUrl } = req.body;
 
   try {
     const user = await prisma.user.create({
-      data: { pseudo, phone, photoUrl },
+      data: { pseudo, phone, profileImageUrl },
     });
     res.json(user);
   } catch (error) {
