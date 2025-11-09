@@ -1,7 +1,5 @@
-// Vercel Serverless Entry Pointconst express = require('express');
-
-module.exports = require('./bam-auth-server.js');const http = require('http');
-
+const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
