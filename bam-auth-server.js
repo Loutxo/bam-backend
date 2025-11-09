@@ -2,8 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
-// Charger .env.local en priorité
-require('dotenv').config({ path: '.env.local' });
+// Charger .env.local en priorité (uniquement en local)
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: '.env.local' });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
